@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 적정체중 & 맞춤 식단 분석기</title>
+  <!-- Tailwind CSS & Marked (마크다운 파서) CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body { font-family: 'Pretendard', sans-serif; }
+    .prose h3 { font-size: 1.125rem; font-weight: 700; color: #065f46; margin-top: 1rem; margin-bottom: 0.5rem; }
+    .prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 1rem; }
+    .prose li { margin-bottom: 0.25rem; }
+  </style>
+</head>
+<body class="bg-emerald-50/50 min-h-screen py-10 px-4">
+
+  <div class="max-w-xl mx-auto space-y-6">
+    
+    <!-- 타이틀 영역 -->
+    <header class="text-center space-y-2">
+      <div class="inline-flex items-center justify-center p-3 bg-emerald-100 rounded-full text-emerald-600 mb-2">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-bold text-gray-800">AI 적정체중 & 식단 추천</h1>
+      <p class="text-sm text-gray-500">Gemini AI가 내 신체 정보에 맞는 체중 분석과 식단을 알려드려요.</p>
+    </header>
+
+    <!-- 1. 위쪽: 입력 폼 -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 space-y-4">
+      <form id="bmiForm" class="space-y-4">
+        
+        <!-- 성별 선택 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">성별</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer">
+              <input type="radio" name="gender" value="남성" checked class="peer hidden">
+              <div class="py-2.5 text-center text-sm font-medium border border-gray-200 rounded-xl peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 transition-all">
+                남성
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="gender" value="여성" class="peer hidden">
+              <div class="py-2.5 text-center text-sm font-medium border border-gray-200 rounded-xl peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 transition-all">
+                여성
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 키 / 몸무게 입력 -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="height" class="block text-sm font-medium text-gray-700 mb-1">키 (cm)</label>
+            <input type="number" id="height" required placeholder="175" min="100" max="230"
+                   class="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-gray-800">
+          </div>
+          <div>
+            <label for="weight" class="block text-sm font-medium text-gray-700 mb-1">몸무게 (kg)</label>
+            <input type="number" id="weight" required placeholder="70" min="30" max="200" step="0.1"
+                   class="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-gray-800">
+          </div>
+        </div>
+
+        <!-- 제출 버튼 -->
+        <button type="submit" id="submitBtn"
+                class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center space-x-2 shadow-sm shadow-emerald-200">
+          <span>분석 및 식단 추천받기</span>
+        </button>
+      </form>
+    </section>
+
+    <!-- 2. 아래쪽: 결과 및 추천 식단 -->
+    <section id="resultContainer" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 space-y-4">
+      <!-- BMI 지수 요약 카드 -->
+      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+        <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600">계산된 BMI 지수</span>
+        <div class="text-3xl font-extrabold text-emerald-800 mt-1" id="bmiValue">--</div>
+      </div>
+
+      <!-- AI 분석 내용 (마크다운 출력) -->
+      <div id="aiAnalysis" class="prose text-sm text-gray-700 leading-relaxed space-y-2"></div>
+    </section>
+
+    <!-- 로딩 스피너 -->
+    <div id="loading" class="hidden text-center py-8 space-y-3">
+      <div class="inline-block w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-sm text-emerald-700 font-medium">Gemini AI가 신체 데이터와 최적의 식단을 분석 중입니다...</p>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById('bmiForm');
+    const loading = document.getElementById('loading');
+    const resultContainer = document.getElementById('resultContainer');
+    const bmiValueEl = document.getElementById('bmiValue');
+    const aiAnalysisEl = document.getElementById('aiAnalysis');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const gender = document.querySelector('input[name="gender"]:checked').value;
+      const height = document.getElementById('height').value;
+      const weight = document.getElementById('weight').value;
+
+      // UI 상태 전환
+      resultContainer.classList.add('hidden');
+      loading.classList.remove('hidden');
+
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gender, height, weight })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || '분석을 불러오지 못했습니다.');
+        }
+
+        // 결과 바인딩
+        bmiValueEl.textContent = data.bmi;
+        aiAnalysisEl.innerHTML = marked.parse(data.analysis);
+
+        loading.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+      } catch (err) {
+        alert(err.message);
+        loading.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
