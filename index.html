@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 적정체중 & 맞춤 식단 분석기</title>
+  <title>AI 적정체중 분석 & 건강 게시판</title>
   <!-- Tailwind CSS & Marked (마크다운 파서) CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -17,7 +17,7 @@
 </head>
 <body class="bg-emerald-50/50 min-h-screen py-10 px-4">
 
-  <div class="max-w-xl mx-auto space-y-6">
+  <div class="max-w-xl mx-auto space-y-8">
     
     <!-- 타이틀 영역 -->
     <header class="text-center space-y-2">
@@ -27,14 +27,12 @@
         </svg>
       </div>
       <h1 class="text-2xl font-bold text-gray-800">AI 적정체중 & 식단 추천</h1>
-      <p class="text-sm text-gray-500">Gemini AI가 내 신체 정보에 맞는 체중 분석과 식단을 알려드려요.</p>
+      <p class="text-sm text-gray-500">Gemini AI 분석과 함께 자유롭게 의견을 나누어 보세요.</p>
     </header>
 
-    <!-- 1. 위쪽: 입력 폼 -->
+    <!-- 1. 위쪽: 신체정보 입력 폼 -->
     <section class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 space-y-4">
       <form id="bmiForm" class="space-y-4">
-        
-        <!-- 성별 선택 -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">성별</label>
           <div class="grid grid-cols-2 gap-3">
@@ -53,7 +51,6 @@
           </div>
         </div>
 
-        <!-- 키 / 몸무게 입력 -->
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label for="height" class="block text-sm font-medium text-gray-700 mb-1">키 (cm)</label>
@@ -67,7 +64,6 @@
           </div>
         </div>
 
-        <!-- 제출 버튼 -->
         <button type="submit" id="submitBtn"
                 class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center space-x-2 shadow-sm shadow-emerald-200">
           <span>분석 및 식단 추천받기</span>
@@ -75,15 +71,12 @@
       </form>
     </section>
 
-    <!-- 2. 아래쪽: 결과 및 추천 식단 -->
+    <!-- 2. 아래쪽: Gemini 분석 결과 -->
     <section id="resultContainer" class="hidden bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 space-y-4">
-      <!-- BMI 지수 요약 카드 -->
       <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
         <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600">계산된 BMI 지수</span>
         <div class="text-3xl font-extrabold text-emerald-800 mt-1" id="bmiValue">--</div>
       </div>
-
-      <!-- AI 분석 내용 (마크다운 출력) -->
       <div id="aiAnalysis" class="prose text-sm text-gray-700 leading-relaxed space-y-2"></div>
     </section>
 
@@ -93,8 +86,133 @@
       <p class="text-sm text-emerald-700 font-medium">Gemini AI가 신체 데이터와 최적의 식단을 분석 중입니다...</p>
     </div>
 
+    <hr class="border-emerald-200 my-8">
+
+    <!-- 3. Firestore 게시판 영역 -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 space-y-6">
+      <h2 class="text-xl font-bold text-gray-800 flex items-center space-x-2">
+        <span>💬 자유 게시판</span>
+      </h2>
+
+      <!-- 글 작성 폼 -->
+      <form id="postForm" class="space-y-3">
+        <div class="flex gap-2">
+          <input type="text" id="authorInput" placeholder="작성자 이름" required
+                 class="w-1/3 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm">
+          <input type="text" id="contentInput" placeholder="의견이나 한 줄 메모를 입력하세요..." required
+                 class="w-2/3 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm">
+        </div>
+        <button type="submit" id="postBtn"
+                class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl text-sm transition-colors">
+          등록하기
+        </button>
+      </form>
+
+      <!-- 게시글 목록 (최신순) -->
+      <div class="space-y-3 pt-2">
+        <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">게시글 목록</h3>
+        <div id="postsList" class="space-y-3">
+          <p class="text-sm text-gray-400 text-center py-4">게시글을 불러오는 중...</p>
+        </div>
+      </div>
+    </section>
+
   </div>
 
+  <!-- Firebase SDK Modules (v10) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      query, 
+      orderBy, 
+      onSnapshot, 
+      serverTimestamp 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // 제공해주신 Firebase Web 설정값
+    const firebaseConfig = {
+      apiKey: "AIzaSyC4vczV511QBvhT39Ft5RQZtecS6_URq2Y",
+      authDomain: "hack-test-e39f7.firebaseapp.com",
+      projectId: "hack-test-e39f7",
+      storageBucket: "hack-test-e39f7.firebasestorage.app",
+      messagingSenderId: "251094181355",
+      appId: "1:251094181355:web:1c753a9564ba3df312a5ae"
+    };
+
+    // Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const postsRef = collection(db, "posts");
+
+    // 1. 게시글 작성 (Firestore 저장)
+    const postForm = document.getElementById('postForm');
+    const authorInput = document.getElementById('authorInput');
+    const contentInput = document.getElementById('contentInput');
+
+    postForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const author = authorInput.value.trim();
+      const content = contentInput.value.trim();
+
+      if (!author || !content) return;
+
+      try {
+        await addDoc(postsRef, {
+          author: author,
+          content: content,
+          createdAt: serverTimestamp()
+        });
+
+        contentInput.value = ''; // 입력창 초기화
+      } catch (err) {
+        console.error("Firestore 저장 오류:", err);
+        alert("글 등록에 실패했습니다.");
+      }
+    });
+
+    // 2. 게시글 최신순 불러오기 (실시간 감시)
+    const postsList = document.getElementById('postsList');
+    const q = query(postsRef, orderBy("createdAt", "desc"));
+
+    onSnapshot(q, (snapshot) => {
+      postsList.innerHTML = '';
+
+      if (snapshot.empty) {
+        postsList.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">등록된 게시글이 없습니다.</p>';
+        return;
+      }
+
+      snapshot.forEach((doc) => {
+        const post = doc.data();
+        const dateStr = post.createdAt ? new Date(post.createdAt.seconds * 1000).toLocaleString('ko-KR') : '방금 전';
+
+        const postCard = document.createElement('div');
+        postCard.className = 'p-4 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-1';
+        postCard.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span class="font-semibold text-sm text-emerald-900">${escapeHtml(post.author)}</span>
+            <span class="text-xs text-gray-400">${dateStr}</span>
+          </div>
+          <p class="text-sm text-gray-700 leading-normal">${escapeHtml(post.content)}</p>
+        `;
+        postsList.appendChild(postCard);
+      });
+    }, (error) => {
+      console.error("Firestore 읽기 오류:", error);
+      postsList.innerHTML = '<p class="text-sm text-red-500 text-center py-4">게시글을 불러오지 못했습니다. Firebase Firestore 규칙을 확인해주세요.</p>';
+    });
+
+    // XSS 방지 헬퍼 함수
+    function escapeHtml(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+
+  <!-- Gemini API 연동 Script -->
   <script>
     const form = document.getElementById('bmiForm');
     const loading = document.getElementById('loading');
@@ -109,7 +227,6 @@
       const height = document.getElementById('height').value;
       const weight = document.getElementById('weight').value;
 
-      // UI 상태 전환
       resultContainer.classList.add('hidden');
       loading.classList.remove('hidden');
 
@@ -126,7 +243,6 @@
           throw new Error(data.error || '분석을 불러오지 못했습니다.');
         }
 
-        // 결과 바인딩
         bmiValueEl.textContent = data.bmi;
         aiAnalysisEl.innerHTML = marked.parse(data.analysis);
 
