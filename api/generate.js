@@ -1,7 +1,6 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(req, res) {
-  // CORS 처리 및 POST 메서드 검증
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -18,9 +17,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // 계산 로직 (BMI 및 적정체중 계산)
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
     const heightInMeters = parseFloat(height) / 100;
     const weightInKg = parseFloat(weight);
     const bmi = (weightInKg / (heightInMeters * heightInMeters)).toFixed(1);
@@ -45,14 +44,12 @@ export default async function handler(req, res) {
    - 식단 조절 시 주의할 점 2~3가지
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
 
     return res.status(200).json({
       bmi,
-      analysis: response.text,
+      analysis: responseText,
     });
   } catch (error) {
     console.error('Gemini API Error:', error);
